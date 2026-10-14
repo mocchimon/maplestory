@@ -6,4 +6,5 @@ Controls
 Press F6 to toggle, ESC to quit
 
 install:
-pip install -r requirements.txt
+-Clone or download the source
+-pip install -r requirements.txt
