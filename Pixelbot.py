@@ -3,7 +3,7 @@ import time
 import re
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab
-from pynput import keyboard
+import keyboard as kb  # Using the robust keyboard library for hotkeys
 import win32gui
 import win32api
 import win32con
@@ -33,7 +33,7 @@ last_mp_heal_time = 0.0
 
 is_running = False
 
-# Virtual key codes and scan codes for END and DEL
+# Virtual key codes for END and DEL
 VK_END = 0x23
 VK_DEL = 0x2E
 
@@ -47,7 +47,7 @@ def find_target_hwnd():
             text = win32gui.GetWindowText(hwnd)
             if WINDOW_TITLE_PART.lower() in text.lower():
                 found_hwnd = hwnd
-                return False  # Stop searching once found
+                return False
         return True
 
     win32gui.EnumWindows(enum_windows_callback, None)
@@ -57,10 +57,8 @@ def send_key_direct(vk_code):
     """Sends low-level key down and up events that games running via DirectInput/Wrappers can detect."""
     try:
         scan_code = win32api.MapVirtualKey(vk_code, 0)
-        # Key down
         win32api.keybd_event(vk_code, scan_code, 0, 0)
         time.sleep(0.05)
-        # Key up
         win32api.keybd_event(vk_code, scan_code, win32con.KEYEVENTF_KEYUP, 0)
     except Exception as e:
         print(f"[Input Error]: {e}")
@@ -110,17 +108,27 @@ def capture_and_read_values(target_hwnd, rel_x, rel_y, width, height, label):
     
     return None, None
 
+def toggle_bot():
+    global is_running
+    is_running = not is_running
+    status = "RESUMED" if is_running else "PAUSED"
+    print(f"\n[HOTKEY] Bot status: {status}")
+
+def exit_bot():
+    print("\n[HOTKEY] Terminating bot script.")
+    import sys
+    sys.exit(0)
+
 def bot_loop():
     global last_hp_heal_time, last_mp_heal_time, is_running
-    print("Bot initialized (Admin Mode). Press F6 to toggle, ESC to quit.")
     
-    # Dynamically find the window handle on startup
     target_hwnd = find_target_hwnd()
     if not target_hwnd:
         print(f"[Error] Could not find any window matching '{WINDOW_TITLE_PART}'. Make sure the game is running!")
         return
 
     print(f"[Success] Automatically locked to HWND {target_hwnd}!")
+    print("Bot initialized (Admin Mode). Press F6 to toggle, ESC to quit.")
 
     while True:
         if not is_running:
@@ -153,25 +161,12 @@ def bot_loop():
 
         time.sleep(0.3)
 
-def on_press(key):
-    global is_running
-    try:
-        if key == keyboard.Key.f6:
-            is_running = not is_running
-            status = "RESUMED" if is_running else "PAUSED"
-            print(f"\n[HOTKEY] Bot status: {status}")
-        elif key == keyboard.Key.esc:
-            print("\n[HOTKEY] Terminating bot script.")
-            return False
-    except Exception:
-        pass
-
 if __name__ == "__main__":
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
+    # Register global hotkeys using the keyboard library
+    kb.add_hotkey('f6', toggle_bot)
+    kb.add_hotkey('esc', exit_bot)
+    
     try:
         bot_loop()
     except KeyboardInterrupt:
         pass
-    finally:
-        listener.stop()
