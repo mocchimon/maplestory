@@ -20,7 +20,8 @@ except Exception:
 # Point to your tesseract installation if needed
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-TARGET_HWND = 19531744
+# Window title keyword to search for dynamically on startup
+WINDOW_TITLE_PART = "MapleStory Worlds"
 
 # Locked-in coordinates
 HP_REL_X, HP_REL_Y, HP_W, HP_H = 450, 950, 145, 24
@@ -36,6 +37,22 @@ is_running = False
 VK_END = 0x23
 VK_DEL = 0x2E
 
+def find_target_hwnd():
+    """Dynamically finds the window handle by searching for part of its title."""
+    found_hwnd = None
+    
+    def enum_windows_callback(hwnd, extra):
+        nonlocal found_hwnd
+        if win32gui.IsWindowVisible(hwnd):
+            text = win32gui.GetWindowText(hwnd)
+            if WINDOW_TITLE_PART.lower() in text.lower():
+                found_hwnd = hwnd
+                return False  # Stop searching once found
+        return True
+
+    win32gui.EnumWindows(enum_windows_callback, None)
+    return found_hwnd
+
 def send_key_direct(vk_code):
     """Sends low-level key down and up events that games running via DirectInput/Wrappers can detect."""
     try:
@@ -48,14 +65,14 @@ def send_key_direct(vk_code):
     except Exception as e:
         print(f"[Input Error]: {e}")
 
-def get_absolute_bbox(rel_x, rel_y, width, height):
+def get_absolute_bbox(target_hwnd, rel_x, rel_y, width, height):
     try:
-        if not win32gui.IsWindow(TARGET_HWND):
+        if not win32gui.IsWindow(target_hwnd):
             return None
-        if win32gui.IsIconic(TARGET_HWND):
+        if win32gui.IsIconic(target_hwnd):
             return None
             
-        screen_x, screen_y = win32gui.ClientToScreen(TARGET_HWND, (rel_x, rel_y))
+        screen_x, screen_y = win32gui.ClientToScreen(target_hwnd, (rel_x, rel_y))
         
         if screen_x < -30000 or screen_y < -30000:
             return None
@@ -64,8 +81,8 @@ def get_absolute_bbox(rel_x, rel_y, width, height):
     except Exception:
         return None
 
-def capture_and_read_values(rel_x, rel_y, width, height, label):
-    bbox = get_absolute_bbox(rel_x, rel_y, width, height)
+def capture_and_read_values(target_hwnd, rel_x, rel_y, width, height, label):
+    bbox = get_absolute_bbox(target_hwnd, rel_x, rel_y, width, height)
     if not bbox:
         return None, None
 
@@ -97,11 +114,13 @@ def bot_loop():
     global last_hp_heal_time, last_mp_heal_time, is_running
     print("Bot initialized (Admin Mode). Press F6 to toggle, ESC to quit.")
     
-    test_bbox = get_absolute_bbox(HP_REL_X, HP_REL_Y, HP_W, HP_H)
-    if test_bbox:
-        print(f"[Success] Locked to HWND {TARGET_HWND}!")
-    else:
-        print(f"[Warning] Target HWND {TARGET_HWND} is currently minimized or hidden.")
+    # Dynamically find the window handle on startup
+    target_hwnd = find_target_hwnd()
+    if not target_hwnd:
+        print(f"[Error] Could not find any window matching '{WINDOW_TITLE_PART}'. Make sure the game is running!")
+        return
+
+    print(f"[Success] Automatically locked to HWND {target_hwnd}!")
 
     while True:
         if not is_running:
@@ -112,7 +131,7 @@ def bot_loop():
 
         # --- HP Check (< 40%) ---
         if current_time - last_hp_heal_time >= COOLDOWN_DURATION:
-            hp_curr, hp_max = capture_and_read_values(HP_REL_X, HP_REL_Y, HP_W, HP_H, "HP")
+            hp_curr, hp_max = capture_and_read_values(target_hwnd, HP_REL_X, HP_REL_Y, HP_W, HP_H, "HP")
             if hp_curr is not None and hp_max > 0:
                 pct = (hp_curr / hp_max) * 100
                 print(f"[HP Status] Read: {hp_curr}/{hp_max} -> {pct:.1f}%")
@@ -123,7 +142,7 @@ def bot_loop():
 
         # --- MP Check (< 30%) ---
         if current_time - last_mp_heal_time >= COOLDOWN_DURATION:
-            mp_curr, mp_max = capture_and_read_values(MP_REL_X, MP_REL_Y, MP_W, MP_H, "MP")
+            mp_curr, mp_max = capture_and_read_values(target_hwnd, MP_REL_X, MP_REL_Y, MP_W, MP_H, "MP")
             if mp_curr is not None and mp_max > 0:
                 pct = (mp_curr / mp_max) * 100
                 print(f"[MP Status] Read: {mp_curr}/{mp_max} -> {pct:.1f}%")
